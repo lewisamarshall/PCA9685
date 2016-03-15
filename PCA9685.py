@@ -8,6 +8,7 @@ class PCA9685(object):
     _address = 0x40
     _motor = [True]*16
     _clock = 25e6
+    _items = [None]*16
 
     def __init__(self, location=None, address=None):
         self._bus_location = location or self._bus_location
@@ -27,8 +28,13 @@ class PCA9685(object):
         lines.append('Mode: {:b}'.format(self.mode()))
         return '\n'.join(lines)
 
+    def __getitem__(self, idx):
+        assert idx in range(16), 'Invalid channel.'
+        return self._itemp[idx]
+
     def servo(self, channel):
-        return Servo(self, channel)
+        self._items[channel] = Servo(self, channel)
+        return self[channel]
 
     def led(self, channel):
         return LED(self, channel)
@@ -59,14 +65,24 @@ class PCA9685(object):
         value2 = self._read(register+1)
         return ((value2 & 0b111)<<8) + value1
 
-    def mode(self):
+    def mode(self, bit=None, state=None):
         mode_0 = self._read(0)
         mode_1 = self._read(1)
-        return (mode_0<<8) + mode_1
+        if bit is None:
+            return (mode_0<<8) + mode_1
+
+    def write_bit(self, register, bit, state):
+        initial = self._read(register)
+        mask = 1<<bit
+        if state is True:
+            final = initial | mask
+        else:
+            final = initial & ~mask
+        self._write(register, final)
 
     def active(self, state=True):
         if state is True:
-            self._write(0, 0b1)
+            self._write_bit(0, 0b1)
         else:
             self._write(0, 0b10001)
 
@@ -96,12 +112,8 @@ class LED(object):
 if __name__ == '__main__':
     import time
     controller = PCA9685()
-    controller.active()
-    controller.frequency(50)
-    print(controller)
-    servo = controller.servo(15)
-    print(servo.position())
-    for i in range(180):
-        servo.position(i)
-        time.sleep(0.01)
-    print(servo.position())
+    controller.mode()
+    controller.write_bit(0, 4, False)
+    controller.mode()
+    controller.write_bit(0, 4, True)
+    controller.mode()
