@@ -36,8 +36,8 @@ class PCA9685(object):
         self._items[channel] = Servo(self, channel)
         return self[channel]
 
-    def led(self, channel):
-        return LED(self, channel)
+    def pwm(self, channel):
+        return PWM(self, channel)
 
     def frequency(self, freq=None):
         if freq is None:
@@ -82,32 +82,85 @@ class PCA9685(object):
 
     def active(self, state=True):
         if state is True:
-            self._write_bit(0, 0b1)
+            self._write_bit(0, 4, True)
         else:
-            self._write(0, 0b10001)
+            self._write_bit(0, 4, False)
 
-class Servo(object):
+
+class Channel(object):
+    _on_register = None
+    _off_register = None
+
+    def __init__(self, controller, channel):
+        assert channel in range(16), 'invalid channel'
+        self._controller = controller
+        self._channel = channel
+        self._on_register = 6 + channel * 4
+        self._off_register = self._on_register + 2
+
+    def __repr__(self):
+        base = 'Channel(controller={}, channel={})'
+        return base.format(self._controller, self._channel)
+
+    def __str__(self):
+        lines = []
+        lines.append('Channel')
+        lines.append('-------')
+        lines.append('channel: {}'.format(self._channel))
+        lines.append('on: {}'.format(self.on()))
+        lines.append('off: {}'.format(self.off()))
+        return '\n'.join(lines)
+
+    def on(self, state=None):
+        if state is None:
+            return self._controller._long_read(self._on_register)
+        else:
+            self._controller._long_write(self._on_register, state)
+
+    def off(self, state=None):
+        if state is None:
+            return self._controller._long_read(self._off_register)
+        else:
+            self._controller._long_write(self._off_register, state)
+
+
+class Servo(Channel):
     def __init__(self, controller, channel):
         self._controller = controller
         self._channel = channel
 
     def position(self, angle=None):
         if angle is None:
-            on = self._controller._long_read(6 + self._channel*4)
-            off = self._controller._long_read(6 + self._channel*4+2)
-            angle = ((off-on)/4095.*20.-1.)*180.
+            angle = ((self.off()-self.on())/4095.*20.-1.)*180.
             return angle, on, off
         else:
             assert 0<=angle<=180
             on = 0
             off = int(4095/20*(1.+(angle/180.)))
-            self._controller._long_write(6+self._channel*4, on)
-            self._controller._long_write(6+self._channel*4+2, off)
+            self.on(on)
+            self.off(off)
 
-class LED(object):
-     def __init__(self, bus, channel):
-        self._bus = bus
-        self._channel = channel
+
+class PWM(Channel):
+    def duty(self, state=None):
+        if state is None:
+            state = (self.on()-self.off())%4095
+            return state/4095.
+        elif 0.<=state<=1.:
+            state = state * 4095
+            self.off((self.on()+state) % 4095)
+        else:
+            raise RuntimeError('Duty cycle outside range.')
+
+    def phase(self, state=None):
+        if state is None:
+            return self.on()/4095.
+        elif 0.<=state<=1.:
+            state = state * 4095
+            self.off((self.on()+state) % 4095)
+        else:
+            raise RuntimeError('Phase outside range.')
+
 
 if __name__ == '__main__':
     import time
