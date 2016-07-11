@@ -4,15 +4,14 @@ import smbus
 
 class PCA9685(object):
 
-    _bus_location = 1
-    _address = 0x40
-    _motor = [True]*16
+    _bus_location = None
+    _address = None
     _clock = 25e6
     _items = [None]*16
 
-    def __init__(self, location=None, address=None):
-        self._bus_location = location or self._bus_location
-        self._address = address or self._address
+    def __init__(self, location=1, address=0x40):
+        self._bus_location = location
+        self._address = address
         self._bus = smbus.SMBus(self._bus_location)
 
     def __repr__(self):
